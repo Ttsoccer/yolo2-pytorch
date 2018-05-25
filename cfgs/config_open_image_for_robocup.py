@@ -4,7 +4,8 @@ import json
 
 # OpenImage
 ############################
-path = '../data/open_image_for_robocup/class_label.json'
+#path = '/data/unagi0/takayanagi/robocup/OpenImage_for_robocup/class_label.json'
+path = './data/open_image_for_robocup/class_label.json'
 with open(path, 'r') as f:
     label_names = json.load(f)
 num_classes = len(label_names)
