@@ -6,26 +6,20 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import scipy.sparse
 
-# from functools import partial
-
 from .imdb import ImageDataset
 from .voc_eval import voc_eval
-# from utils.yolo import preprocess_train
-
 
 class VOCDataset(ImageDataset):
-    def __init__(self, imdb_name, datadir, batch_size, im_processor,
+    def __init__(self, data_type, year, datadir, batch_size, im_processor, cfg,
                  processes=3, shuffle=True, dst_size=None):
-        super(VOCDataset, self).__init__(imdb_name, datadir, batch_size,
-                                         im_processor, processes,
+        imdb_name = '%s%s'%(data_type, year)
+        super(VOCDataset, self).__init__('voc_'+imdb_name, datadir, batch_size,
+                                         im_processor, cfg, processes,
                                          shuffle, dst_size)
-        meta = imdb_name.split('_')
-        self._year = meta[1]
-        self._image_set = meta[2]
-        self._devkit_path = os.path.join(datadir,
-                                         'VOCdevkit{}'.format(self._year))
-        self._data_path = os.path.join(self._devkit_path,
-                                       'VOC{}'.format(self._year))
+        self._year = year
+        self._image_set = data_type
+        self._devkit_path = os.path.join(datadir, 'VOCdevkit')
+        self._data_path = os.path.join(self._devkit_path, 'VOC{}'.format(self._year))
         assert os.path.exists(self._devkit_path), \
             'VOCdevkit path does not exist: {}'.format(self._devkit_path)
         assert os.path.exists(self._data_path), \
@@ -132,19 +126,12 @@ class VOCDataset(ImageDataset):
         filename = os.path.join(self._data_path, 'Annotations', index + '.xml')
         tree = ET.parse(filename)
         objs = tree.findall('object')
-        # if not self.config['use_diff']:
-        #     # Exclude the samples labeled as difficult
-        #     non_diff_objs = [
-        #         obj for obj in objs if int(obj.find('difficult').text) == 0]
-        #     # if len(non_diff_objs) != len(objs):
-        #     #     print 'Removed {} difficult objects'.format(
-        #     #         len(objs) - len(non_diff_objs))
-        #     objs = non_diff_objs
         num_objs = len(objs)
 
         boxes = np.zeros((num_objs, 4), dtype=np.uint16)
         gt_classes = np.zeros((num_objs), dtype=np.int32)
         overlaps = np.zeros((num_objs, self.num_classes), dtype=np.float32)
+
         # "Seg" area for pascal is just the box area
         seg_areas = np.zeros((num_objs), dtype=np.float32)
         ishards = np.zeros((num_objs), dtype=np.int32)

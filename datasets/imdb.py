@@ -2,9 +2,7 @@ import os
 import numpy as np
 from multiprocessing import Pool
 from functools import partial
-import cfgs.config as cfg
 import cv2
-
 
 def mkdir(path, max_depth=3):
     parent, child = os.path.split(path)
@@ -16,12 +14,13 @@ def mkdir(path, max_depth=3):
 
 
 class ImageDataset(object):
-    def __init__(self, name, datadir, batch_size, im_processor,
+    def __init__(self, name, datadir, batch_size, im_processor, cfg,
                  processes=3, shuffle=True, dst_size=None):
         self._name = name
         self._data_dir = datadir
         self._batch_size = batch_size
         self.dst_size = dst_size
+        self.cfg = cfg
 
         self._epoch = -1
         self._num_classes = 0
@@ -50,7 +49,7 @@ class ImageDataset(object):
             if self._shuffle:
                 np.random.shuffle(indexes)
             self.gen = self.pool.imap(partial(self._im_processor,
-                                              size_index=None),
+                                              size_index=None, data_name=self.name),
                                       ([self.image_names[i],
                                         self.get_annotation(i),
                                         self.dst_size] for i in indexes),
@@ -63,13 +62,13 @@ class ImageDataset(object):
                 images, gt_boxes, classes, dontcare, origin_im = next(self.gen)
 
                 # multi-scale
-                w, h = cfg.multi_scale_inp_size[size_index]
+                w, h = self.cfg.multi_scale_inp_size[size_index]
                 gt_boxes = np.asarray(gt_boxes, dtype=np.float)
-                if len(gt_boxes) > 0:
+                if len(gt_boxes) > 0 and "OpenImage" not in self.name:
                     gt_boxes[:, 0::2] *= float(w) / images.shape[1]
                     gt_boxes[:, 1::2] *= float(h) / images.shape[0]
                 images = cv2.resize(images, (w, h))
-
+                
                 batch['images'].append(images)
                 batch['gt_boxes'].append(gt_boxes)
                 batch['gt_classes'].append(classes)
@@ -81,7 +80,7 @@ class ImageDataset(object):
                 if self._shuffle:
                     np.random.shuffle(indexes)
                 self.gen = self.pool.imap(partial(self._im_processor,
-                                                  size_index=None),
+                                                  size_index=None, data_name=self.name),
                                           ([self.image_names[i],
                                             self.get_annotation(i),
                                             self.dst_size] for i in indexes),

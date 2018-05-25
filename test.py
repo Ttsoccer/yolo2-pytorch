@@ -32,6 +32,23 @@ thresh = 0.01
 vis = False
 # ------------
 
+def main(args):
+    data_name = args.data_name
+    data_type = args.data_type
+    year = args.year
+    batch_size = args.batch_size
+    num_process = args.num_process
+    gpu_id = args.gpu_id
+    if gpu_id>=0:
+        torch.cuda.set_device(gpu_id)
+    lr = args.lr
+    lr_decay_epochs = args.lr_decay_epochs
+    lr_decay_rate = args.lr_decay_rate
+    epoch = args.epoch
+    disp_interval = args.disp_interval
+    exp_name = args.exp_name
+    use_tensorboard = args.use_tensorboard
+
 
 def test_net(net, imdb, max_per_image=300, thresh=0.5, vis=False):
     num_images = imdb.num_images
