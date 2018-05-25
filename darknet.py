@@ -77,7 +77,7 @@ def _process_batch(data, size_index, data_name):
     bbox_np = bbox_np[0]
     bbox_np[:, :, 0::2] *= float(inp_size[0])  # rescale x
     bbox_np[:, :, 1::2] *= float(inp_size[1])  # rescale y
-    if data_name=='open_image':
+    if 'open_image' in data_name:
         gt_boxes[:, 0::2] *= float(inp_size[0])  # rescale x
         gt_boxes[:, 1::2] *= float(inp_size[1])  # rescale y
         gt_boxes = gt_boxes.astype(np.int)
@@ -175,6 +175,8 @@ class Darknet19(nn.Module):
             from cfgs import config_coco as cfg
         elif data_name=='open_image':
             from cfgs import config_open_image as cfg
+        elif data_name=='open_image_for_robocup':
+            from cfgs import config_open_image_for_robocup as cfg
 
         # darknet
         self.conv1s, c1 = _make_layers(3, net_cfgs[0:5])
