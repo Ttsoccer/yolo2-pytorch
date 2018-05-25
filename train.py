@@ -59,6 +59,13 @@ def main(args):
                         batch_size=batch_size, im_processor=im_processor, cfg=cfg,
                         processes=num_process, shuffle=True,
                         dst_size=cfg.multi_scale_inp_size)
+    elif data_name=='open_image_for_robocup':
+        from datasets.open_image_for_robocup import OpenImageForRobocupDataset
+        from cfgs import config_open_image_for_robocup as cfg
+        imdb = OpenImageForRobocupDataset(data_type=data_type, datadir=datadir,
+                        batch_size=batch_size, im_processor=im_processor, cfg=cfg,
+                        processes=num_process, shuffle=True,
+                        dst_size=cfg.multi_scale_inp_size)
 
     loader = torch.utils.data.DataLoader(imdb, batch_size=batch_size, shuffle=True, num_workers=num_process)
     save_dir = os.path.join(save_root_path, data_name)
