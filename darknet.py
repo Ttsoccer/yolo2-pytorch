@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import utils.network as net_utils
-import cfgs.config as cfg
+#import cfgs.config as cfg
 from layers.reorg.reorg_layer import ReorgLayer
 from utils.cython_bbox import bbox_ious, anchor_intersections
 from utils.cython_yolo import yolo_to_bbox
@@ -37,7 +37,14 @@ def _make_layers(in_channels, net_cfg):
     return nn.Sequential(*layers), in_channels
 
 
-def _process_batch(data, size_index):
+def _process_batch(data, size_index, data_name):
+    if data_name=='voc':
+        from cfgs import config_voc as cfg
+    elif data_name=='mscoco':
+        from cfgs import config_coco as cfg
+    elif data_name=='open_image':
+        from cfgs import config_open_image as cfg
+        
     W, H = cfg.multi_scale_out_size[size_index]
     inp_size = cfg.multi_scale_inp_size[size_index]
     out_size = cfg.multi_scale_out_size[size_index]
@@ -70,21 +77,27 @@ def _process_batch(data, size_index):
     bbox_np = bbox_np[0]
     bbox_np[:, :, 0::2] *= float(inp_size[0])  # rescale x
     bbox_np[:, :, 1::2] *= float(inp_size[1])  # rescale y
-
+    if data_name=='open_image':
+        gt_boxes[:, 0::2] *= float(inp_size[0])  # rescale x
+        gt_boxes[:, 1::2] *= float(inp_size[1])  # rescale y
+        gt_boxes = gt_boxes.astype(np.int)
+        gt_classes += 1
     # gt_boxes_b = np.asarray(gt_boxes[b], dtype=np.float)
     gt_boxes_b = np.asarray(gt_boxes, dtype=np.float)
 
     # for each cell, compare predicted_bbox and gt_bbox
     bbox_np_b = np.reshape(bbox_np, [-1, 4])
+
     ious = bbox_ious(
         np.ascontiguousarray(bbox_np_b, dtype=np.float),
         np.ascontiguousarray(gt_boxes_b, dtype=np.float)
     )
-    best_ious = np.max(ious, axis=1).reshape(_iou_mask.shape)
-    iou_penalty = 0 - iou_pred_np[best_ious < cfg.iou_thresh]
-    _iou_mask[best_ious <= cfg.iou_thresh] = cfg.noobject_scale * iou_penalty
+    if gt_boxes.shape[0]>0:
+        best_ious = np.max(ious, axis=1).reshape(_iou_mask.shape)
+        iou_penalty = 0 - iou_pred_np[best_ious < cfg.iou_thresh]
+        _iou_mask[best_ious <= cfg.iou_thresh] = cfg.noobject_scale * iou_penalty
 
-    # locate the cell of each gt_boxe
+    # locate the cell of each gt_boxes
     cell_w = float(inp_size[0]) / W
     cell_h = float(inp_size[1]) / H
     cx = (gt_boxes_b[:, 0] + gt_boxes_b[:, 2]) * 0.5 / cell_w
@@ -113,8 +126,8 @@ def _process_batch(data, size_index):
     ious_reshaped = np.reshape(ious, [hw, num_anchors, len(cell_inds)])
     for i, cell_ind in enumerate(cell_inds):
         if cell_ind >= hw or cell_ind < 0:
-            print('cell inds size {}'.format(len(cell_inds)))
-            print('cell over {} hw {}'.format(cell_ind, hw))
+            #print('cell inds size {}'.format(len(cell_inds)))
+            #print('cell over {} hw {}'.format(cell_ind, hw))
             continue
         a = anchor_inds[i]
 
@@ -138,7 +151,7 @@ def _process_batch(data, size_index):
 
 
 class Darknet19(nn.Module):
-    def __init__(self):
+    def __init__(self, data_name):
         super(Darknet19, self).__init__()
 
         net_cfgs = [
@@ -156,6 +169,12 @@ class Darknet19(nn.Module):
             # conv4
             [(1024, 3)]
         ]
+        if data_name=='voc':
+            from cfgs import config_voc as cfg
+        elif data_name=='mscoco':
+            from cfgs import config_coco as cfg
+        elif data_name=='open_image':
+            from cfgs import config_open_image as cfg
 
         # darknet
         self.conv1s, c1 = _make_layers(3, net_cfgs[0:5])
@@ -178,14 +197,16 @@ class Darknet19(nn.Module):
         self.bbox_loss = None
         self.iou_loss = None
         self.cls_loss = None
-        self.pool = Pool(processes=10)
+        self.pool = Pool(processes=1)
+        self.data_name = data_name
+        self.cfg = cfg
 
     @property
     def loss(self):
         return self.bbox_loss + self.iou_loss + self.cls_loss
 
     def forward(self, im_data, gt_boxes=None, gt_classes=None, dontcare=None,
-                size_index=0):
+                size_index=0, gpu_id=-1):
         conv1s = self.conv1s(im_data)
         conv2 = self.conv2(conv1s)
         conv3 = self.conv3(conv2)
@@ -202,7 +223,7 @@ class Darknet19(nn.Module):
         # assert bsize == 1, 'detection only support one image per batch'
         global_average_pool_reshaped = \
             global_average_pool.permute(0, 2, 3, 1).contiguous().view(bsize,
-                                                                      -1, cfg.num_anchors, cfg.num_classes + 5)  # noqa
+                                                                      -1, self.cfg.num_anchors, self.cfg.num_classes + 5)  # noqa
 
         # tx, ty, tw, th, to -> sig(tx), sig(ty), exp(tw), exp(th), sig(to)
         xy_pred = F.sigmoid(global_average_pool_reshaped[:, :, :, 0:2])
@@ -211,7 +232,7 @@ class Darknet19(nn.Module):
         iou_pred = F.sigmoid(global_average_pool_reshaped[:, :, :, 4:5])
 
         score_pred = global_average_pool_reshaped[:, :, :, 5:].contiguous()
-        prob_pred = F.softmax(score_pred.view(-1, score_pred.size()[-1])).view_as(score_pred)  # noqa
+        prob_pred = F.softmax(score_pred.view(-1, score_pred.size()[-1]), dim=1).view_as(score_pred)  # noqa
 
         # for training
         if self.training:
@@ -225,15 +246,21 @@ class Darknet19(nn.Module):
                                    iou_pred_np,
                                    size_index)
 
-            _boxes = net_utils.np_to_variable(_boxes)
-            _ious = net_utils.np_to_variable(_ious)
-            _classes = net_utils.np_to_variable(_classes)
-            box_mask = net_utils.np_to_variable(_box_mask,
-                                                dtype=torch.FloatTensor)
-            iou_mask = net_utils.np_to_variable(_iou_mask,
-                                                dtype=torch.FloatTensor)
-            class_mask = net_utils.np_to_variable(_class_mask,
-                                                  dtype=torch.FloatTensor)
+            _boxes = net_utils.np_to_variable(_boxes, gpu_id=gpu_id)
+            _ious = net_utils.np_to_variable(_ious, gpu_id=gpu_id)
+            _classes = net_utils.np_to_variable(_classes, gpu_id=gpu_id)
+            """
+            if gpu_id>=0:
+                dtype = torch.cuda.FloatTensor
+            else:
+                dtype = torch.FloatTensor
+            """
+            box_mask = net_utils.np_to_variable(_box_mask, gpu_id=gpu_id)
+                                                #dtype=dtype)
+            iou_mask = net_utils.np_to_variable(_iou_mask, gpu_id=gpu_id)
+                                                #dtype=dtype)
+            class_mask = net_utils.np_to_variable(_class_mask, gpu_id=gpu_id)
+                                                  #dtype=dtype)
 
             num_boxes = sum((len(boxes) for boxes in gt_boxes))
 
@@ -257,7 +284,7 @@ class Darknet19(nn.Module):
 
         bsize = bbox_pred_np.shape[0]
 
-        targets = self.pool.map(partial(_process_batch, size_index=size_index),
+        targets = self.pool.map(partial(_process_batch, size_index=size_index, data_name=self.data_name),
                                 ((bbox_pred_np[b], gt_boxes[b],
                                   gt_classes[b], dontcare[b], iou_pred_np[b])
                                  for b in range(bsize)))
@@ -288,7 +315,7 @@ class Darknet19(nn.Module):
                 list_key = key.split('.')
                 ptype = dest_src['{}.{}'.format(list_key[-2], list_key[-1])]
                 src_key = '{}-convolutional/{}:0'.format(i, ptype)
-                print((src_key, own_dict[key].size(), params[src_key].shape))
+                #print((src_key, own_dict[key].size(), params[src_key].shape))
                 param = torch.from_numpy(params[src_key])
                 if ptype == 'kernel':
                     param = param.permute(3, 2, 0, 1)

@@ -1,20 +1,25 @@
 import os
 import numpy as np
 
-def mkdir(path, max_depth=3):
-    parent, child = os.path.split(path)
-    if not os.path.exists(parent) and max_depth > 1:
-        mkdir(parent, max_depth-1)
-
-    if not os.path.exists(path):
-        os.mkdir(path)
-
-# VOC
-label_names = ('aeroplane', 'bicycle', 'bird', 'boat',
-               'bottle', 'bus', 'car', 'cat', 'chair',
-               'cow', 'diningtable', 'dog', 'horse',
-               'motorbike', 'person', 'pottedplant',
-               'sheep', 'sofa', 'train', 'tvmonitor')
+# MSCOCO
+############################
+label_names = ('__background__', 'person', 'bicycle', 'car', 'motorcycle',
+            'airplane', 'bus', 'train', 'truck', 'boat',
+            'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench',
+            'bird', 'cat', 'dog', 'horse', 'sheep',
+            'cow', 'elephant', 'bear', 'zebra', 'giraffe',
+            'backpack', 'umbrella', 'handbag', 'tie', 'suitcase',
+            'frisbee', 'skis', 'snowboard', 'sports ball', 'kite',
+            'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
+            'bottle', 'wine glass', 'cup', 'fork', 'knife',
+            'spoon', 'bowl', 'banana', 'apple', 'sandwich',
+            'orange', 'broccoli', 'carrot', 'hot dog', 'pizza',
+            'donut', 'cake', 'chair', 'couch', 'potted plant',
+            'bed', 'dining table', 'toilet', 'tv', 'laptop',
+            'mouse', 'remote', 'keyboard', 'cell phone', 'microwave',
+            'oven', 'toaster', 'sink', 'refrigerator', 'book',
+            'clock', 'vase', 'scissors', 'teddy bear', 'hair drier',
+            'toothbrush')
 num_classes = len(label_names)
 
 # input and output size
@@ -65,14 +70,11 @@ class_scale = 1.
 coord_scale = 1.
 iou_thresh = 0.6
 
-# train config
+# dir config
 ############################
 weight_decay = 0.0005
 momentum = 0.9
-anchors = np.asarray([(1.3221, 1.73145), (3.19275, 4.00944),
-                      (5.05587, 8.09892), (9.47112, 4.84053), (11.2364, 10.0071)],
+anchors = np.asarray([(0.57273, 0.677385), (1.87446, 2.06253),
+                      (3.33843, 5.47434), (7.88282, 3.52778), (9.77052, 9.16828)],
                       dtype=np.float)
-#anchors = np.asarray([(1.08, 1.19), (3.42, 4.41),
-#                      (6.63, 11.38), (9.42, 5.11), (16.62, 10.52)],
-#                     dtype=np.float)
 num_anchors = len(anchors)

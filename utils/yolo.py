@@ -11,7 +11,6 @@ from utils.cython_yolo import yolo_to_bbox
 # See https://github.com/pytorch/pytorch/issues/1355.
 cv2.setNumThreads(0)
 
-
 def clip_boxes(boxes, im_shape):
     """
     Clip boxes to image boundaries.
@@ -45,7 +44,6 @@ def _offset_boxes(boxes, im_shape, scale, offs, flip):
     boxes[:, 0::2] -= offs[0]
     boxes[:, 1::2] -= offs[1]
     boxes = clip_boxes(boxes, im_shape)
-
     if flip:
         boxes_x = np.copy(boxes[:, 0])
         boxes[:, 0] = im_shape[1] - boxes[:, 2]
@@ -54,16 +52,19 @@ def _offset_boxes(boxes, im_shape, scale, offs, flip):
     return boxes
 
 
-def preprocess_train(data, size_index):
+def preprocess_train(data, size_index, data_name):
     im_path, blob, inp_size = data
 
     boxes, gt_classes = blob['boxes'], blob['gt_classes']
-
+    
     im = cv2.imread(im_path)
     ori_im = np.copy(im)
 
     im, trans_param = imcv2_affine_trans(im)
     scale, offs, flip = trans_param
+    if "OpenImage" in data_name:
+        offs[0] /= float(im.shape[1])
+        offs[1] /= float(im.shape[0])
     boxes = _offset_boxes(boxes, im.shape, scale, offs, flip)
 
     if inp_size is not None and size_index is not None:
@@ -81,7 +82,8 @@ def preprocess_train(data, size_index):
     # im = cv2.resize(im, (w, h))
     # im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
     # im /= 255
-    boxes = np.asarray(boxes, dtype=np.int)
+    boxes = np.asarray(boxes, dtype=np.float)
+
     return im, boxes, gt_classes, [], ori_im
 
 
@@ -104,7 +106,7 @@ def preprocess_test(data, size_index):
 
 
 def postprocess(bbox_pred, iou_pred, prob_pred, im_shape, cfg, thresh=0.05,
-                size_index=0):
+                size_index=0, data_name='voc'):
     """
     bbox_pred: (bsize, HxW, num_anchors, 4)
                ndarray of float (sig(tx), sig(ty), exp(tw), exp(th))

@@ -100,9 +100,11 @@ def load_pretrained_npy(faster_rcnn_model, fname):
         frcnn_dict[key].copy_(param)
 
 
-def np_to_variable(x, is_cuda=True, dtype=torch.FloatTensor, volatile=False):
+def np_to_variable(x, gpu_id=-1, dtype=torch.FloatTensor, volatile=False):
     v = Variable(torch.from_numpy(x).type(dtype), volatile=volatile)
-    if is_cuda:
+    if gpu_id>=0:
+        #torch.cuda.set_device(gpu_id)
+        #v = v.cuda(gpu_id)
         v = v.cuda()
     return v
 
