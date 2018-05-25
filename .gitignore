@@ -105,5 +105,5 @@ VOCdevkit/*
 src/*
 
 # Jupyter file
-.ipynb
+*.ipynb
 
